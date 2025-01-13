@@ -1,0 +1,213 @@
+openapi: 3.0.3
+info:
+  title: Yanki Digital Wallet API
+  description: API for management Digital Wallet.
+  version: 1.0.0
+servers:
+  - url: http://localhost:8084
+    description: Local server
+
+paths:
+  /wallet/register:
+    post:
+      summary: Register a new wallet
+      operationId: registerWallet
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WalletRegistrationRequest'
+      responses:
+        '201':
+          description: Wallet register succesfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WalletResponse'
+        '400':
+          description: Bad request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /wallet/send-payment:
+    post:
+      summary: Send payment by wallet
+      operationId: sendPayment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentRequest'
+      responses:
+        '200':
+          description: Payment send succesfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentResponse'
+        '400':
+          description: Bad request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /wallet/{phoneNumber}/balance:
+    get:
+      summary: Consult balance of wallet
+      operationId: getWalletBalance
+      parameters:
+        - name: phoneNumber
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Phone number of wallet.
+      responses:
+        '200':
+          description: Consult Balance of wallet succesfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BalanceResponse'
+        '404':
+          description: Wallet not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /wallet/{phoneNumber}/associate-card:
+    post:
+      summary: Associate debid card to wallet
+      operationId: associateCard
+      parameters:
+        - name: phoneNumber
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Phone number of wallet.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardAssociationRequest'
+      responses:
+        '200':
+          description: Associate card succesfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WalletResponse'
+        '404':
+          description: Wallet not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    WalletRegistrationRequest:
+      type: object
+      required:
+        - documentType
+        - documentNumber
+        - phoneNumber
+        - email
+        - imei
+      properties:
+        documentType:
+          type: string
+          enum: [DNI, CEX, Passport]
+          description: Type document.
+        documentNumber:
+          type: string
+          description: Number of document.
+        phoneNumber:
+          type: string
+          description: Phone number of user.
+        email:
+          type: string
+          format: email
+          description: Email of user.
+        imei:
+          type: string
+          description: IMEI of mobile device.
+    WalletResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        phoneNumber:
+          type: string
+          description: Phone number of wallet.
+        balance:
+          type: number
+          format: double
+          description: Balance of wallet.
+    PaymentRequest:
+      type: object
+      required:
+        - senderPhoneNumber
+        - receiverPhoneNumber
+        - amount
+      properties:
+        senderPhoneNumber:
+          type: string
+          description: Sender wallet phone number.
+        receiverPhoneNumber:
+          type: string
+          description: Recipient wallet phone number.
+        amount:
+          type: number
+          format: double
+          description: Amount to send.
+    PaymentResponse:
+      type: object
+      properties:
+        transactionId:
+          type: string
+          description: ID of transaction.
+        status:
+          type: string
+          enum: [SUCCESS, FAILED]
+          description: Transaction status.
+    BalanceResponse:
+      type: object
+      properties:
+        phoneNumber:
+          type: string
+          description: Phone number of wallet.
+        balance:
+          type: number
+          format: double
+          description: Balance of wallet.
+    CardAssociationRequest:
+      type: object
+      required:
+        - cardNumber
+        - expirationDate
+      properties:
+        cardNumber:
+          type: string
+          description: Debit card number.
+        expirationDate:
+          type: string
+          format: date
+          description: Expiration date of debit card.
+    ErrorResponse:
+      type: object
+      properties:
+        errorCode:
+          type: string
+          description: Error code.
+        errorMessage:
+          type: string
+          description: Error description.
