@@ -1,6 +1,5 @@
 package com.ms_yanki.repository;
 
-import org.springframework.data.mongodb.repository.ReactiveMongoRepository;
 import org.springframework.data.repository.reactive.RxJava3CrudRepository;
 
 import com.ms_yanki.model.Wallet;

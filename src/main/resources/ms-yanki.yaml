@@ -167,7 +167,6 @@ components:
           description: Recipient wallet phone number.
         amount:
           type: number
-          format: double
           description: Amount to send.
     PaymentResponse:
       type: object

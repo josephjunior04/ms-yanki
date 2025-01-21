@@ -1,5 +1,7 @@
 package com.ms_yanki.service.impl;
 
+import java.util.NoSuchElementException;
+
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 
@@ -7,9 +9,11 @@ import com.ms_yanki.model.BalanceResponse;
 import com.ms_yanki.model.CardAssociationRequest;
 import com.ms_yanki.model.PaymentRequest;
 import com.ms_yanki.model.PaymentResponse;
+import com.ms_yanki.model.UpdateCardBalanceRequest;
 import com.ms_yanki.model.Wallet;
 import com.ms_yanki.model.WalletRegistrationRequest;
 import com.ms_yanki.model.WalletResponse;
+import com.ms_yanki.model.PaymentResponse.StatusEnum;
 import com.ms_yanki.repository.WalletRepository;
 import com.ms_yanki.service.WalletService;
 
@@ -45,7 +49,7 @@ public class WalletServiceImpl implements WalletService {
     public Single<BalanceResponse> getWalletBalance(String phoneNumber) {
         return walletRepository.findByPhoneNumber(phoneNumber)
                 .flatMap(wallet -> {
-                    if (wallet.isCardAssociated()) {
+                    if (wallet.getCardAssociated()) {
                         kafkaTemplate.send("get-card-balance", wallet.getPhoneNumber());
                     }
                     BalanceResponse response = new BalanceResponse();
@@ -60,7 +64,7 @@ public class WalletServiceImpl implements WalletService {
         return Single.create(emitter -> {
             Wallet wallet = new Wallet();
             wallet.setPhoneNumber(request.getPhoneNumber());
-            wallet.setDocumentId(request.getDocumentNumber())
+            wallet.setDocumentId(request.getDocumentNumber());
             wallet.setEmail(request.getEmail());
             wallet.setImei(request.getImei());
             wallet.setCardAssociated(false);
@@ -77,13 +81,41 @@ public class WalletServiceImpl implements WalletService {
 
     @Override
     public Single<PaymentResponse> sendPayment(PaymentRequest request) {
-        return Single.create(emitter -> {
-            kafkaTemplate.send("process-payment", request);
+        return Single.zip(
+                walletRepository.findByPhoneNumber(request.getSenderPhoneNumber()),
+                walletRepository.findByPhoneNumber(request.getReceiverPhoneNumber()),
+                (senderWallet, receiverWallet) -> {
+                    if (senderWallet.getCardAssociated()) {
+                        kafkaTemplate.send("update-card-balance", new UpdateCardBalanceRequest(
+                                senderWallet.getNroCardAssociated(),
+                                request.getAmount(),
+                                "DEBIT"));
+                    } else {
+                        senderWallet.setBalance(senderWallet.getBalance().subtract(request.getAmount()));
+                        walletRepository.save(senderWallet).blockingGet();
+                    }
 
-            PaymentResponse response = new PaymentResponse();
-            response.setTransactionId("TX-" + System.currentTimeMillis());
-            emitter.onSuccess(response);
-        });
+                    if (receiverWallet.getCardAssociated()) {
+                        kafkaTemplate.send("update-card-balance", new UpdateCardBalanceRequest(
+                                receiverWallet.getNroCardAssociated(),
+                                request.getAmount(),
+                                "CREDIT"));
+                    } else {
+                        receiverWallet.setBalance(receiverWallet.getBalance().add(request.getAmount()));
+                        walletRepository.save(receiverWallet).blockingGet();
+                    }
+
+                    PaymentResponse response = new PaymentResponse();
+                    response.setTransactionId("TX-" + System.currentTimeMillis());
+                    response.setStatus(StatusEnum.SUCCESS);
+                    return response;
+                }).onErrorResumeNext(error -> {
+                    if (error instanceof NoSuchElementException) {
+                        return Single
+                                .error(() -> new IllegalArgumentException("Wallet not found for phone in request"));
+                    }
+                    return Single.error(() -> new RuntimeException("Unexpected error occurred", error));
+                });
     }
 
 }
